@@ -11,12 +11,9 @@ import os
 import csv
 from dataset.image_utils import pad_or_crop_image, irm_min_max_preprocess, zscore_normalise
 from dataset.transforms import *
+from dataset.brats_paths import BRATS_TRAIN_FOLDERS, BRATS_TRAIN_FOLDERS_20, TEST_FOLDER
 
 user = "LH"
-BRATS_TRAIN_FOLDERS='/yourpath/2-MICCAI_BraTS_2018/MICCAI_BraTS_2018_Data_Training'
-TEST_FOLDER='/yourpath/2-MICCAI_BraTS_2018/MICCAI_BraTS_2018_Data_Validation'
-BRATS_TRAIN_FOLDERS_20='Path of your brats dataset'  # (*/BRATS2020_Training_none_npy)
-
 
 
 def get_brats_folder():
@@ -49,7 +46,12 @@ class Brats(Dataset):
             self.patterns += ["_seg"]
         for patient_dir in patients_dir:
             patient_id = patient_dir.name
-            paths = [patient_dir / f"{patient_id}{value}.nii.gz" for value in self.patterns]
+            # Support both BraTS2018 (.nii.gz) and BraTS2020 Kaggle archives (.nii).
+            paths = []
+            for value in self.patterns:
+                gz_path = patient_dir / f"{patient_id}{value}.nii.gz"
+                nii_path = patient_dir / f"{patient_id}{value}.nii"
+                paths.append(gz_path if gz_path.exists() else nii_path)
             patient = dict(
                 id=patient_id, t1=paths[0], t1ce=paths[1],
                 t2=paths[2], flair=paths[3], seg=paths[4] if not no_seg else None
@@ -325,51 +327,36 @@ def get_datasets_train_rf_withtest(seed, on="train", fold_number=0, normalisatio
         return train_dataset, val_dataset, train_dataset2, [l.name for l in train]
         
 
+def _brats20_paths_for_id_list(patients_dir, id_list):
+    """Map folder basename substrings in id_list to full paths (stable order)."""
+    id_list = sorted(set(s.strip() for s in id_list if s.strip()))
+    out = []
+    for l in patients_dir:
+        for id_str in id_list:
+            if id_str in l:
+                out.append(l)
+                break
+    return out
+
+
 def get_datasets_brats20_rf(seed, on="train", fold_number=0, normalisation="minmax", part = 1, all_data = False, patch_shape = 128):
     data_root = get_brats_folder_20()
-    
-    data_file_path = data_root + "/train.txt"
-    #train_list = []
-    with open(data_file_path, 'r') as f:
-        train_list = [i.strip()[3:] for i in f.readlines()]
-    train_list.sort()
-    
-    data_file_path = data_root + "val.txt"
-    #train_list = []
-    with open(data_file_path, 'r') as f:
-        train_list.extend([i.strip()[3:] for i in f.readlines()])
-    train_list.sort()
 
-    data_file_path = data_root + "test.txt"
-    with open(data_file_path, 'r') as f:
-        test_list = [i.strip()[3:] for i in f.readlines()]
-    test_list.sort()
-    
-    patients_dir = glob.glob(os.path.join(data_root, "*"))
+    with open(os.path.join(data_root, "train.txt"), "r") as f:
+        train_id_list = [i.strip() for i in f.readlines()]
+    with open(os.path.join(data_root, "val.txt"), "r") as f:
+        val_id_list = [i.strip() for i in f.readlines()]
+
+    patients_dir = glob.glob(os.path.join(data_root, "BraTS20_Training_*"))
     print(len(patients_dir))
     patients_dir.sort()
-    train = []
-    test = []
-    for l in patients_dir:
-        for l2 in train_list:
-            #print(l, l2)
-            if l2 in l:
-                train.append(l)
-                break
-    
-    for l in patients_dir:
-        for l2 in test_list:
-            if l2 in l:
-                test.append(l)
-                break
-                
-    
-    train = [Path(l) for l in train]
-    #val = [Path(l) for l in val]
-    test = [Path(l) for l in test]
-    
 
-    
+    train_paths = _brats20_paths_for_id_list(patients_dir, train_id_list)
+    val_paths = _brats20_paths_for_id_list(patients_dir, val_id_list)
+
+    train = [Path(l) for l in train_paths]
+    test = [Path(l) for l in val_paths]
+
     print("train length: " , len(train))
     print("val length: " , len(test))
     

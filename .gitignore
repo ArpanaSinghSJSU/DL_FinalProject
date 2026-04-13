@@ -1,0 +1,7 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+
+# Local BraTS data (too large for Git)
+dataset/archive/
+dataset/archive.zip
