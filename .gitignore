@@ -1,7 +1,6 @@
-.DS_Store
+outputs/
 __pycache__/
-*.py[cod]
-
-# Local BraTS data (too large for Git)
-dataset/archive/
-dataset/archive.zip
+*.pth
+*.pyc
+.ipynb_checkpoints/
+*.zip
